@@ -10,17 +10,19 @@ Install
 pip install git+https://github.com/takumiohym/nb_translator.git
 ```
 
-If you are using notebook environment other than Google Cloud notebook envieronment like AI Platform Notebook, you need to configure the Translation API following this document.
-https://cloud.google.com/translate/docs/setup
+If you are using notebook environment other than Google Cloud envieronment like AI Platform Notebook, you need to configure the Translation API following these documents.
+- https://cloud.google.com/docs/authentication/getting-started
+- https://cloud.google.com/translate/docs/setup
 
 
 Usage
 -----
 
 ```
-translate_nb <source notebook file> --target_language <language code> --project_id <your GCP project id>
+translate_nb <source notebook file> --target_language <language code>
 [--target_file <target notebook file>] \
 [--source_langauge <language code>] \
+[--project_id <your GCP project id>] \
 [--region <gcp region>]
 ```
 
@@ -30,7 +32,7 @@ Example
 Translate English Notebook file into Japanese (source language is `en` by default)
 
 ```
-translate_nb notebook_source_en.ipynb --target_language ja --project_id <your GCP project id>
+translate_nb notebook_source_en.ipynb --target_language ja
 > ja version of .notebook_source_en.ipynb is successfully generated as ja_notebook_source_en.ipynb
 ```
 
@@ -38,7 +40,7 @@ Translate Spanish Notebook file into Korean
 
 
 ```
-translate_nb notebook_source_es.ipynb --source_language es --target_language ko --project_id <your GCP project id>
+translate_nb notebook_source_es.ipynb --source_language es --target_language ko
 > ko version of .notebook_source_es.ipynb is successfully generated as ko_notebook_source_es.ipynb
 ```
 

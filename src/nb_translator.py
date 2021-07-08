@@ -4,6 +4,7 @@ import os
 import fire
 
 from google.cloud import translate
+import google.auth
 
 translate_client = translate.TranslationServiceClient()
 
@@ -12,8 +13,12 @@ def translate_nb(source_file, target_file=None, source_language='en', target_lan
         raise OSError('{} is not jupyter notebook file. Specify .ipynb format file'.format(source_file))
 
     if project_id is None:
-        #TODO: Add config function to get DefaultProject ID
-        raise RuntimeError('Please specify GCP project ID in project_id option')
+        try:
+            project_id = google.auth.default()[1]
+        except:
+            raise RuntimeError('Default GCP Project ID is not set. \
+            Please specify GCP project ID directly in project_id option. \
+            Or configure following this document. https://cloud.google.com/docs/authentication/getting-started ')
 
     if target_file is None:
         target_file = '{}/{}_{}'.format(os.path.dirname(os.path.realpath(source_file)), target_language, os.path.basename(source_file))
@@ -67,7 +72,7 @@ def translate_nb(source_file, target_file=None, source_language='en', target_lan
         json.dump(ipynb, f)
         
     print('{} version of {} is successfully generated as {}'.format(target_language, source_file, target_file))
-    
+
 
 def main():
     fire.Fire(translate_nb)
