@@ -2,3 +2,4 @@ build
 dist
 *.egg-info
 .ipynb_checkpoints
+src/__pycache__
