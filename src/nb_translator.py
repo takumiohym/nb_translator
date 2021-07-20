@@ -6,35 +6,63 @@ import fire
 from google.cloud import translate
 import google.auth
 
-class NbTranslater():
+class NbTranslator():
+
     def __init__(self):
+        self.no_translate_start_tag = '<span translate="no">'
+        self.no_translate_end_tag = '</span>'
+
         self.translate_client = translate.TranslationServiceClient()
 
-    @staticmethod
-    def _exclude_code_highlight(text):
-        return ''.join([t.replace('`', '<span translate="no">`') \
-                        if i%4==1 else t.replace('`', r'`</span>') \
+    def _split_start_symbols(self, text):
+        # Match only if the sentense start with these symbols and space after it.
+        # #:head, >:quoto, -:list, \d: ordered list, \s:space
+        m = re.match("([#|>|\-|\d\.|\s]*\s)(.*)(\n?)", text)
+        if m:
+            return m.groups()
+        else:
+            return re.match("()(.*)(\n?)", text).groups()
+
+    def _exclude_code_highlight(self, text):
+        return ''.join([t.replace('`', f'{self.no_translate_start_tag}`') \
+                        if i%4==1 else t.replace('`', f'`{self.no_translate_end_tag}') \
                         if i%4==3 else t for i, t in enumerate(re.split('(`)',text))])
 
     # TODO
-    @staticmethod
-    def _exclude_url(text):
+    def _exclude_url(self, text):
         return text
 
-    def _exclude_preprocess(self, text):
-        _text = self._exclude_code_highlight(text)
-        _text = self._exclude_url(_text)
-        return _text
+    def _preprocess(self, text):
+        text = self._exclude_code_highlight(text)
+        text = self._exclude_url(text)
+        return text
 
     def _translate(self, text):
-        return self.translate_client.translate_text(
-            request={
-                "parent": f"projects/{self.project_id}/locations/{self.region}",
-                "contents": text,
-                "mime_type": "text/html",
-                "source_language_code": self.source_language,
-                "target_language_code": self.target_language,
-            }).translations[0].translated_text
+        request={
+            "parent": f"projects/{self.project_id}/locations/{self.region}",
+            "contents": text,
+            "mime_type": "text/html",
+            "source_language_code": self.source_language,
+            "target_language_code": self.target_language,
+        }
+        target = self.translate_client.translate_text(request=request)
+        return target.translations[0].translated_text
+
+    def _remove_no_translate_tag(self, text):
+        text = re.sub(re.compile(self.no_translate_start_tag),'',text)
+        text = re.sub(re.compile(self.no_translate_end_tag),'',text)
+        return text
+
+    def _fix_markdown_symbols(self, text):
+        text = text.replace("（", "(").replace("）", ")")
+        text = text.replace("&#39;", "'").replace("&quot;", '"').replace('] (', '](')
+        text = '**'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('**'))])
+        return text
+
+    def _postprocess(self, text):
+        text = self._remove_no_translate_tag(text)
+        text = self._fix_markdown_symbols(text)
+        return text
 
     def translate(self, source_file, target_file=None, source_language='en', target_language='ja', project_id=None, region='global'):
         if os.path.splitext(source_file)[1] != '.ipynb':
@@ -63,19 +91,16 @@ class NbTranslater():
         for i, c in enumerate(ipynb['cells']):
             if c['cell_type']=="markdown":
                 for j, s in enumerate(c['source']):
-                    sh = re.match("([#|\-|>|\d\.|*|\_|\s]*)(.*)(\n?)", s).groups()
+                    sp = self._preprocess(s)
+                    sh = self._split_start_symbols(sp)
                     if sh[1]:
-                        text = self._exclude_preprocess(sh[1])
-                        target = re.sub(re.compile('<.*?>'),'', self._translate([text]))
+                        target = self._translate([sh[1]])
                     else:
                         target = ''
-                    # reshape for md symbol
-                    target_formatted = target.replace("（", "(").replace("）", ")")
-                    target_formatted = target_formatted.replace("&#39;", "'").replace("&quot;", '"').replace('] (', '](')
-                    target_formatted = '**'.join([t.strip() if i%2==1 else t for i, t in enumerate(target_formatted.split('**'))])
-                    target_formatted = sh[0] + re.sub("\s?/\s?", "/", target_formatted) + ('  ' + sh[2] if sh[2] else '')
-
-                    ipynb['cells'][i]['source'][j] = target_formatted
+                    # postprocess
+                    target = self._postprocess(target)
+                    target_finalized = sh[0] + re.sub("\s?/\s?", "/", target) + ('  ' + sh[2] if sh[2] else '')
+                    ipynb['cells'][i]['source'][j] = target_finalized
 
         with open(target_file, 'w') as f:
             json.dump(ipynb, f)
@@ -84,7 +109,7 @@ class NbTranslater():
 
 
 def main():
-    nb_translater = NbTranslater()
+    nb_translater = NbTranslator()
     fire.Fire(nb_translater.translate)
 
 if __name__ == '__main__':
