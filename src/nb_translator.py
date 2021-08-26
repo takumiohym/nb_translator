@@ -73,14 +73,17 @@ class NbTranslator():
         text = self._fix_markdown_symbols(text)
         return text
 
-    def run(self, source_file, target_file=None, source_language='en', target_language='ja', project_id=None, region='global'):
+    def run(self, source_file, target_file=None, source_language='en', target_language=None, project_id=None, region='global'):
         if os.path.splitext(source_file)[1] != '.ipynb':
-            raise OSError('{} is not jupyter notebook file. Specify .ipynb format file'.format(source_file))
+            raise NameError('{} is not jupyter notebook file. Specify .ipynb format file'.format(source_file))
         self.source_file=source_file
 
         if target_file is None:
             target_file = '{}/{}_{}'.format(os.path.dirname(os.path.realpath(source_file)), target_language, os.path.basename(source_file))
         self.target_file = target_file
+
+        if target_language is None:
+            raise TypeError('Please specify target language code. e.g. ja')
 
         self.source_language = source_language
         self.target_language = target_language
