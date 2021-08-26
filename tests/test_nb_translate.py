@@ -88,20 +88,34 @@ class TestNbTranslator(TestCase):
     def test_fix_markdown_symbols(self):
         nb_translator = NbTranslator()
         
-        texts = ['（）', '&#39;aaa&#39;', '&quot;bbb&quot;', '] (','* aaa * bbb', '** aaa ** bbb']
-        expected = ['()', "'aaa'", '"bbb"', '](', '*aaa* bbb', '**aaa** bbb']
+        texts = ['（）', '&#39;aaa&#39;', '&quot;bbb&quot;', '] (']
+        expected = ['()', "'aaa'", '"bbb"', '](']
         self.assertEqual([nb_translator._fix_markdown_symbols(t) for t in texts ], expected)
         
+    def test_squish_text_format_symbols(self):
+        nb_translator = NbTranslator()
+
+        texts = ['* aaa * bbb', '** aaa ** bbb']
+        expected = ['*aaa* bbb', '**aaa** bbb']
+        self.assertEqual([nb_translator._squish_text_format_symbols(t) for t in texts ], expected)
+
+    def test_squish_inline_math_equation(self):
+        nb_translator = NbTranslator()
+
+        texts = ['aaa $ \ hat { Y } $ bbb', 'aaa  \ hat { Y }  bbb']
+        expected = ['aaa $\hat{Y}$ bbb', 'aaa  \ hat { Y }  bbb']
+        self.assertEqual([nb_translator._squish_inline_math_equation(t) for t in texts ], expected)
+
     def test_post_process(self):
         nb_translator = NbTranslator()
 
         text = 'aaa bbb <span translate="no">`CCC`</span> ddd <span translate="no">`EEE`</span>'
         expected = 'aaa bbb `CCC` ddd `EEE`'
-        self.assertEqual(nb_translator._remove_no_translate_tag(text), expected)
+        self.assertEqual(nb_translator._postprocess(text), expected)
 
         texts = ['（）', '&#39;aaa&#39;', '&quot;bbb&quot;', '] (','* aaa * bbb', '** aaa ** bbb']
         expected = ['()', "'aaa'", '"bbb"', '](', '*aaa* bbb', '**aaa** bbb']
-        self.assertEqual([nb_translator._fix_markdown_symbols(t) for t in texts ], expected)
+        self.assertEqual([nb_translator._postprocess(t) for t in texts ], expected)
 
     @ignore_warnings
     def test_run(self):

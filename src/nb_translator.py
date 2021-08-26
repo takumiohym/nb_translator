@@ -12,6 +12,12 @@ class NbTranslator():
         self.no_translate_start_tag = '<span translate="no">'
         self.no_translate_end_tag = '</span>'
 
+        self.exclude_block_symbol_pair = {
+            '```python': '```', # Python syntax highlight
+            '```': '```', # General code block
+            '\\begin{equation}': '\\end{equation}' # Math equation block
+        }
+
         self.translate_client = translate.TranslationServiceClient()
 
     def _split_start_symbols(self, text):
@@ -63,16 +69,23 @@ class NbTranslator():
         })
         text = text.translate(table)
         text = text.replace("&#39;", "'").replace("&quot;", '"').replace('] (', '](')
+        return text
 
+    def _squish_text_format_symbols(self, text):
         # * aaa * -> *aaa*
         text = '*'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('*'))])
         # ** aaa ** -> **aaa**
         text = '**'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('**'))])
         return text
 
+    def _squish_inline_math_equation(self, text):
+        return '$'.join([s.replace(' ','') if i%2==1 else s for i,s in enumerate(text.split('$'))] )
+
     def _postprocess(self, text):
         text = self._remove_no_translate_tag(text)
         text = self._fix_markdown_symbols(text)
+        text = self._squish_text_format_symbols(text)
+        text = self._squish_inline_math_equation(text)
         return text
 
     def run(self, source_file, target_file=None, source_language='en', target_language=None, project_id=None, region='global', exclude_inline_code=False, exclude_url=False):
@@ -107,17 +120,29 @@ class NbTranslator():
 
         for i, c in enumerate(ipynb['cells']):
             if c['cell_type']=="markdown":
+                skip = False
+                end_with = None
                 for j, s in enumerate(c['source']):
-                    sp = self._preprocess(s)
-                    sh = self._split_start_symbols(sp)
-                    if sh[1]:
-                        target = self._translate([sh[1]])
+                    if not skip and s.strip() in self.exclude_block_symbol_pair.keys():
+                        ipynb['cells'][i]['source'][j] = s
+                        skip = True
+                        end_with = self.exclude_block_symbol_pair[s.strip()]
+                    elif skip:
+                        ipynb['cells'][i]['source'][j] = s
+                        if s.strip() == end_with:
+                            skip = False
+                            end_with = None
                     else:
-                        target = ''
-                    # postprocess
-                    target = self._postprocess(target)
-                    target_finalized = sh[0] + re.sub("\s?/\s?", "/", target) + ('  ' + sh[2] if sh[2] else '')
-                    ipynb['cells'][i]['source'][j] = target_finalized
+                        sp = self._preprocess(s)
+                        sh = self._split_start_symbols(sp)
+                        if sh[1]:
+                            target = self._translate([sh[1]])
+                        else:
+                            target = ''
+                        # postprocess
+                        target = self._postprocess(target)
+                        target_finalized = sh[0] + re.sub("\s?/\s?", "/", target) + ('  ' + sh[2] if sh[2] else '')
+                        ipynb['cells'][i]['source'][j] = target_finalized
 
         with open(target_file, 'w') as f:
             json.dump(ipynb, f)
