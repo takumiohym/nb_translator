@@ -55,8 +55,16 @@ class NbTranslator():
         return text
 
     def _fix_markdown_symbols(self, text):
-        text = text.replace("（", "(").replace("）", ")")
+        table = str.maketrans({
+            '（': '(',
+            '）': ')',
+        })
+        text = text.translate(table)
         text = text.replace("&#39;", "'").replace("&quot;", '"').replace('] (', '](')
+
+        # * aaa * -> *aaa*
+        text = '*'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('*'))])
+        # ** aaa ** -> **aaa**
         text = '**'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('**'))])
         return text
 
