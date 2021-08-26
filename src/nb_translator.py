@@ -17,7 +17,8 @@ class NbTranslator():
     def _split_start_symbols(self, text):
         # Match only if the sentense start with these symbols and space after it.
         # #:head, >:quoto, -:list, \d: ordered list, \s:space
-        m = re.match("([#|>|\-|\d\.|\s]*\s)(.*)(\n?)", text)
+        m = re.match("([#|>|\-|\*|\d\.|\s]*\s)(.*)(\n?)", text)
+
         if m:
             return m.groups()
         else:
