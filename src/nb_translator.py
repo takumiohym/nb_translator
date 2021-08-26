@@ -34,8 +34,10 @@ class NbTranslator():
         return text
 
     def _preprocess(self, text):
-        text = self._exclude_code_highlight(text)
-        text = self._exclude_url(text)
+        if self.exclude_inline_code: # disabled by default, since enabling this affects on the quality of translation
+            text = self._exclude_code_highlight(text)
+        if self.exclude_url:
+            text = self._exclude_url(text)
         return text
 
     def _translate(self, text):
@@ -73,7 +75,7 @@ class NbTranslator():
         text = self._fix_markdown_symbols(text)
         return text
 
-    def run(self, source_file, target_file=None, source_language='en', target_language=None, project_id=None, region='global'):
+    def run(self, source_file, target_file=None, source_language='en', target_language=None, project_id=None, region='global', exclude_inline_code=False, exclude_url=False):
         if os.path.splitext(source_file)[1] != '.ipynb':
             raise NameError('{} is not jupyter notebook file. Specify .ipynb format file'.format(source_file))
         self.source_file=source_file
@@ -96,6 +98,9 @@ class NbTranslator():
                 raise RuntimeError('Default GCP Project ID is not set. \
                 Please specify GCP project ID directly in project_id option. \
                 Or configure following this document. https://cloud.google.com/docs/authentication/getting-started ')
+
+        self.exclude_inline_code = exclude_inline_code
+        self.exclude_url = exclude_url
 
         with open(source_file, 'r') as f:
             ipynb = json.load(f)

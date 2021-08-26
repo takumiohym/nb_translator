@@ -57,7 +57,13 @@ class TestNbTranslator(TestCase):
 
         text = 'aaa bbb `CCC` ddd `EEE`'
         expected = 'aaa bbb <span translate="no">`CCC`</span> ddd <span translate="no">`EEE`</span>'
+
+        nb_translator.exclude_inline_code = True
+        nb_translator.exclude_url = False
         self.assertEqual(nb_translator._preprocess(text), expected)
+
+        nb_translator.exclude_inline_code = False
+        self.assertEqual(nb_translator._preprocess(text), text)
 
     @ignore_warnings
     def test_translate(self):
