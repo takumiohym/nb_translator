@@ -1,18 +1,21 @@
 nb_translator
 ===========
 
-Translate markdown descriptions in jupyter notebook using Google Cloud Translation API.
+This is a tool to translate markdown descriptions in jupyter notebook files using Google Cloud Translation API.
 
 Install
 -------
 
+Install the `nbtl` command, and enable the Cloud Translation API.
+
 ```
 pip install git+https://github.com/takumiohym/nb_translator.git
+gcloud services enable translate.googleapis.com
 ```
 
-If you are using notebook environment other than Google Cloud envieronment like AI Platform Notebook, you need to configure the Translation API following these documents.
-- https://cloud.google.com/docs/authentication/getting-started
+If you are using this tool outside of the managed Google Cloud notebook envieronment (e.g. Vertex AI Workbench) please install gcp clients and configure the authentication following these documents.
 - https://cloud.google.com/translate/docs/setup
+- https://cloud.google.com/docs/authentication/getting-started
 
 
 Usage
