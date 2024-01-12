@@ -10,7 +10,7 @@ setup(
     install_requires=["fire", "google-cloud-translate"],
     entry_points={
         "console_scripts": [
-            "translate_nb = src.nb_translator:main",
+            "nbtl = src.nb_translator:main",
         ]
     }
 )

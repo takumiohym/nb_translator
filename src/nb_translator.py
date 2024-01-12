@@ -88,21 +88,31 @@ class NbTranslator():
         text = self._squish_inline_math_equation(text)
         return text
 
-    def run(self, source_file, target_file=None, source_language='en', target_language=None, project_id=None, region='global', exclude_inline_code=False, exclude_url=False):
+    def run(self,
+            source_file,
+            target_file=None,
+            orig='en',
+            to=None,
+            project_id=None,
+            region='global',
+            exclude_inline_code=False,
+            exclude_url=False):
+
         if os.path.splitext(source_file)[1] != '.ipynb':
             raise NameError('{} is not jupyter notebook file. Specify .ipynb format file'.format(source_file))
+
         self.source_file=source_file
+        self.source_language = orig
+        self.target_language = to
+        self.region = region
 
-        if target_file is None:
-            target_file = '{}/{}_{}'.format(os.path.dirname(os.path.realpath(source_file)), target_language, os.path.basename(source_file))
-        self.target_file = target_file
-
-        if target_language is None:
+        if to is None:
             raise TypeError('Please specify target language code. e.g. ja')
 
-        self.source_language = source_language
-        self.target_language = target_language
-        self.region = region
+        if target_file is None:
+            target_file = '{}/{}_{}'.format(os.path.dirname(os.path.realpath(source_file)), self.target_language, os.path.basename(source_file))
+
+        self.target_file = target_file
         
         if project_id is None:
             try:
@@ -144,10 +154,10 @@ class NbTranslator():
                         target_finalized = sh[0] + re.sub("\s?/\s?", "/", target) + ('  ' + sh[2] if sh[2] else '')
                         ipynb['cells'][i]['source'][j] = target_finalized
 
-        with open(target_file, 'w') as f:
+        with open(self.target_file, 'w') as f:
             json.dump(ipynb, f)
 
-        print('{} version of {} is successfully generated as {}'.format(target_language, source_file, target_file))
+        print('{} version of {} is successfully generated as {}'.format(self.target_language, self.source_file, self.target_file))
 
 
 def main():
