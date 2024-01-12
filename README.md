@@ -3,7 +3,7 @@ nb_translator
 
 This is a tool to translate markdown descriptions in jupyter notebook files using Google Cloud Translation API.
 
-Install
+Installation
 -------
 
 Install the `nbtl` command, and enable the Cloud Translation API.
@@ -29,7 +29,7 @@ nbtl <source notebook file> --to <target language code>
 [--region <gcp region>]
 ```
 
-Example
+Examples
 -----
 
 Translate English Notebook file into Japanese (source language is `en` by default)
@@ -47,12 +47,12 @@ nbtl notebook_source_es.ipynb --orig es --to ko
 > ko version of .notebook_source_es.ipynb is successfully generated as ko_notebook_source_es.ipynb
 ```
 
-Reference
+References
 -----
 
-This module is depend on Google Cloud Translation API, so reading these documents beforehand is recommened.
+This tool uses Google Cloud Translation API. Please read these documents and understand the cost and the limitations.
 
-- Pricing (First 500.000 characters per month is free)
+- Pricing
 https://cloud.google.com/translate/pricing
 
 - Quotas
