@@ -36,7 +36,6 @@ Translate English Notebook file into Japanese (source language is `en` by defaul
 
 ```
 nbtl notebook_source_en.ipynb --to ja
-> ja version of .notebook_source_en.ipynb is successfully generated as ja_notebook_source_en.ipynb
 ```
 
 Translate Spanish Notebook file into Korean
@@ -44,7 +43,6 @@ Translate Spanish Notebook file into Korean
 
 ```
 nbtl notebook_source_es.ipynb --orig es --to ko
-> ko version of .notebook_source_es.ipynb is successfully generated as ko_notebook_source_es.ipynb
 ```
 
 References
