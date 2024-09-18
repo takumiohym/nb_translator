@@ -21,7 +21,7 @@ class NbTranslator():
         self.translate_client = translate.TranslationServiceClient()
 
     def _split_start_symbols(self, text):
-        # Match only if the sentense start with these symbols and space after it.
+        # Match only if the sentense start with these symbols and space after them.
         # #:head, >:quoto, -:list, \d: ordered list, \s:space
         m = re.match("([#|>|\-|\*|\d\.|\s]*\s)(.*)(\n?)", text)
 
@@ -31,6 +31,7 @@ class NbTranslator():
             return re.match("()(.*)(\n?)", text).groups()
 
     def _exclude_code_highlight(self, text):
+        # Exclude code highlights in markdown from translation.
         return ''.join([t.replace('`', f'{self.no_translate_start_tag}`') \
                         if i%4==1 else t.replace('`', f'`{self.no_translate_end_tag}') \
                         if i%4==3 else t for i, t in enumerate(re.split('(`)',text))])
@@ -71,21 +72,21 @@ class NbTranslator():
         text = text.replace("&#39;", "'").replace("&quot;", '"').replace('] (', '](')
         return text
 
-    def _squish_text_format_symbols(self, text):
+    def _trim_text_format_symbols(self, text):
         # * aaa * -> *aaa*
         text = '*'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('*'))])
         # ** aaa ** -> **aaa**
         text = '**'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('**'))])
         return text
 
-    def _squish_inline_math_equation(self, text):
+    def _trim_inline_math_equation(self, text):
         return '$'.join([s.replace(' ','') if i%2==1 else s for i,s in enumerate(text.split('$'))] )
 
     def _postprocess(self, text):
         text = self._remove_no_translate_tag(text)
         text = self._fix_markdown_symbols(text)
-        text = self._squish_text_format_symbols(text)
-        text = self._squish_inline_math_equation(text)
+        text = self._trim_text_format_symbols(text)
+        text = self._trim_inline_math_equation(text)
         return text
 
     def run(self,
@@ -93,13 +94,14 @@ class NbTranslator():
             target_file=None,
             orig='en',
             to=None,
+            keep_source=True,
             project_id=None,
             region='global',
             exclude_inline_code=False,
             exclude_url=False):
 
         if os.path.splitext(source_file)[1] != '.ipynb':
-            raise NameError('{} is not jupyter notebook file. Specify .ipynb format file'.format(source_file))
+            raise OSError('{} is not a jupyter notebook file. Specify .ipynb format file'.format(source_file))
 
         self.source_file=source_file
         self.source_language = orig
@@ -107,7 +109,7 @@ class NbTranslator():
         self.region = region
 
         if to is None:
-            raise TypeError('Please specify target language code. e.g. ja')
+            raise AttributeError('Please specify a target language code. e.g. ja')
 
         if target_file is None:
             target_file = '{}/{}_{}'.format(os.path.dirname(os.path.realpath(source_file)), self.target_language, os.path.basename(source_file))
@@ -120,7 +122,7 @@ class NbTranslator():
             except:
                 raise RuntimeError('Default GCP Project ID is not set. \
                 Please specify GCP project ID directly in project_id option. \
-                Or configure following this document. https://cloud.google.com/docs/authentication/getting-started ')
+                Or, configure it following this document. https://cloud.google.com/docs/authentication/getting-started ')
 
         self.exclude_inline_code = exclude_inline_code
         self.exclude_url = exclude_url
@@ -132,13 +134,15 @@ class NbTranslator():
             if c['cell_type']=="markdown":
                 skip = False
                 end_with = None
+                target_finalized = []
+                orig = c['source'].copy()
                 for j, s in enumerate(c['source']):
                     if not skip and s.strip() in self.exclude_block_symbol_pair.keys():
-                        ipynb['cells'][i]['source'][j] = s
+                        c['source'][j] = s
                         skip = True
                         end_with = self.exclude_block_symbol_pair[s.strip()]
                     elif skip:
-                        ipynb['cells'][i]['source'][j] = s
+                        c['source'][j] = s
                         if s.strip() == end_with:
                             skip = False
                             end_with = None
@@ -152,7 +156,11 @@ class NbTranslator():
                         # postprocess
                         target = self._postprocess(target)
                         target_finalized = sh[0] + re.sub("\s?/\s?", "/", target) + ('  ' + sh[2] if sh[2] else '')
-                        ipynb['cells'][i]['source'][j] = target_finalized
+                        c['source'][j] = target_finalized
+                if keep_source:
+                    c['source'].append("\n\n<!--\n")
+                    c['source'].extend(orig)
+                    c['source'].append("\n -->\n")
 
         with open(self.target_file, 'w') as f:
             json.dump(ipynb, f)

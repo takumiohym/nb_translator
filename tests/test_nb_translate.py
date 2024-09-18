@@ -92,19 +92,19 @@ class TestNbTranslator(TestCase):
         expected = ['()', "'aaa'", '"bbb"', '](']
         self.assertEqual([nb_translator._fix_markdown_symbols(t) for t in texts ], expected)
         
-    def test_squish_text_format_symbols(self):
+    def test_trim_text_format_symbols(self):
         nb_translator = NbTranslator()
 
         texts = ['* aaa * bbb', '** aaa ** bbb']
         expected = ['*aaa* bbb', '**aaa** bbb']
-        self.assertEqual([nb_translator._squish_text_format_symbols(t) for t in texts ], expected)
+        self.assertEqual([nb_translator._trim_text_format_symbols(t) for t in texts ], expected)
 
-    def test_squish_inline_math_equation(self):
+    def test_trim_inline_math_equation(self):
         nb_translator = NbTranslator()
 
         texts = ['aaa $ \ hat { Y } $ bbb', 'aaa  \ hat { Y }  bbb']
         expected = ['aaa $\hat{Y}$ bbb', 'aaa  \ hat { Y }  bbb']
-        self.assertEqual([nb_translator._squish_inline_math_equation(t) for t in texts ], expected)
+        self.assertEqual([nb_translator._trim_inline_math_equation(t) for t in texts ], expected)
 
     def test_post_process(self):
         nb_translator = NbTranslator()
@@ -123,16 +123,16 @@ class TestNbTranslator(TestCase):
 
         source_file = 'some.txt'
         target_language = 'ja'
-        with self.assertRaises(NameError):
-            nb_translator.run(source_file, target_language=target_language)
+        with self.assertRaises(OSError):
+            nb_translator.run(source_file, to=target_language)
 
         source_file = 'some.ipynb'
-        with self.assertRaises(TypeError):
+        with self.assertRaises(AttributeError):
             nb_translator.run(source_file)
 
         source_file = './tests/sample.ipynb'
         expected_target_file = f'./tests/{target_language}_sample.ipynb'
-        nb_translator.run(source_file,target_language=target_language)
+        nb_translator.run(source_file,to=target_language)
 
         self.assertTrue(os.path.exists(expected_target_file))
         
