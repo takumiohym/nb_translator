@@ -7,7 +7,7 @@ setup(
     author_email='takumiohym@google.com',
     url='https://github.com/takumiohym/nb_translator',
     packages=find_packages(),
-    install_requires=["fire", "google-cloud-translate"],
+    install_requires=["fire", "google-cloud-translate", "google-genai"],
     entry_points={
         "console_scripts": [
             "nbtl = src.nb_translator:main",
