@@ -1,15 +1,16 @@
 nb_translator
 ===========
 
-This is a tool to translate markdown descriptions in jupyter notebook files using Gemini.
+This is a tool to translate markdown descriptions in jupyter notebook files using Google Cloud Translation API.
 
 Installation
 -------
 
-Install the `nbtl` command.
+Install the `nbtl` command, and enable the Cloud Translation API. (This assumes the gcloud command is already set up. See below for the detail.)
 
 ```
 pip install git+https://github.com/takumiohym/nb_translator.git
+gcloud services enable translate.googleapis.com
 ```
 
 **Note**: If you are using this tool outside of the managed Google Cloud notebook envieronment (e.g. Vertex AI Workbench) please install gcp clients and configure the authentication following these documents.
@@ -23,7 +24,7 @@ Usage
 ```
 nbtl <source notebook file> --to <target language code>
 [--target_file <target notebook file>] \
-[--source_lang <source language code>] \
+[--orig <source language code>] \
 [--project_id <your GCP project id>] \
 [--region <gcp region>]
 ```
@@ -41,7 +42,7 @@ Translate Spanish Notebook file into Korean
 
 
 ```
-nbtl notebook_source_es.ipynb --source_lang es --to ko
+nbtl notebook_source_es.ipynb --orig es --to ko
 ```
 
 References
@@ -55,5 +56,5 @@ https://cloud.google.com/translate/pricing
 - Quotas
 https://cloud.google.com/translate/quotas
 
-- Language Code
+- Supported Language Code
 https://cloud.google.com/translate/docs/languages
