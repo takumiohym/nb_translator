@@ -76,7 +76,6 @@ To set up a development environment and build the package locally, follow these 
     ```bash
     pip install -e .
     ```
-    This command installs the package in a way that allows you to make changes to the source code and test them immediately without reinstalling.
 
 4.  **Install build dependencies:**
     Before building the package, ensure you have the necessary tools. `wheel` is required for building wheel packages, `setuptools` for general packaging operations, and `build` for invoking the build process.
@@ -89,7 +88,6 @@ To set up a development environment and build the package locally, follow these 
     ```bash
     python -m build
     ```
-    This will create the package files (a `.tar.gz` source archive and a `.whl` wheel file) in the `dist/` directory.
 
 6.  **Install the built package for testing:**
     After building, you can install the package from the generated wheel file to test it:
