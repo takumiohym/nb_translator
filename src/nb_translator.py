@@ -15,9 +15,6 @@ class NbTranslator():
         self.no_translate_end_tag_re = re.compile(self.no_translate_end_tag)
 
         # Matches lines starting with markdown symbols or only content.
-        # Group 1: Optional markdown prefix (e.g., "# ", "* ", "1. ")
-        # Group 2: Main content of the line
-        # Group 3: Optional newline character
         self.split_start_symbols_re = re.compile(r"([#|>|\-|\*|\d\.|\s]*\s)?(.*)(\n?)")
         self.empty_match_re = re.compile(r"()(.*)(\n?)")
 
@@ -37,6 +34,9 @@ class NbTranslator():
         # #:head, >:quoto, -:list, \d: ordered list, \s:space
         m = self.split_start_symbols_re.match(text)
         # Ensure that the first group is an empty string if it's None (no markdown symbols)
+        # Group 1: Optional markdown prefix (e.g., "# ", "* ", "1. ")
+        # Group 2: Main content of the line
+        # Group 3: Optional newline character
         groups = m.groups()
         if groups[0] is None:
             return ('', groups[1], groups[2])
@@ -99,8 +99,6 @@ class NbTranslator():
         if not text:
             return text
         # * aaa * -> *aaa*
-        # The existing logic is clear and handles cases like '* *' vs '*' correctly.
-        # Using regex for this can be tricky to get all edge cases right without being overly complex.
         text = '*'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('*'))])
         # ** aaa ** -> **aaa**
         text = '**'.join([t.strip() if i%2==1 else t for i, t in enumerate(text.split('**'))])
@@ -173,11 +171,11 @@ class NbTranslator():
             raise OSError(f"Could not write to target file: {filepath}")
 
     def _translate_notebook_cells(self, ipynb, keep_source):
-        for cell in ipynb.get('cells', []): # Use .get for safety
-            if cell.get('cell_type') == "markdown": # Use .get for safety
+        for cell in ipynb.get('cells', []):
+            if cell.get('cell_type') == "markdown":
                 skip_translation_block = False
                 current_block_end_symbol = None
-                original_source_lines = cell.get('source', []).copy() # Use .get for safety
+                original_source_lines = cell.get('source', []).copy()
                 translated_source_lines = []
 
                 for line_content in original_source_lines:
