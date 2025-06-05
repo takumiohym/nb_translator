@@ -278,50 +278,14 @@ class NbTranslator():
         self._validate_inputs()
         
         notebook_content = self._load_notebook(self.source_file)
-        # Note: run method itself is not async, so we need to run the async method appropriately
         translated_notebook_content = await self._translate_notebook_cells(notebook_content, keep_source)
         self._save_notebook(translated_notebook_content, self.target_file)
 
         print('{} version of {} is successfully generated as {}'.format(self.target_language, self.source_file, self.target_file))
 
 def main():
-    # To run the async method, we use asyncio.run()
-    # fire.Fire will call the run method of NbTranslator instance.
-    # If 'run' itself needs to be async, fire might handle it or need specific configuration.
-    # For now, assuming 'run' calls async methods internally and can be called from sync context.
-    # However, the 'run' method itself is now async due to awaiting _translate_notebook_cells
-    # This means fire.Fire will need to handle an async function.
-    # A simple way to adapt is to make main async and use asyncio.run(main()) if needed,
-    # or ensure fire can handle async methods.
-    # Let's make 'run' async and see if fire handles it. If not, main needs to be async.
     nb_translator = NbTranslator()
     fire.Fire(nb_translator.run)
 
 if __name__ == '__main__':
-    # If fire.Fire does not support async methods directly for the entry point,
-    # we might need to wrap the call. For now, let's assume fire handles it or
-    # the user of the class will call 'run' from an async context.
-    # A common pattern for CLI entry points with asyncio:
-    # asyncio.run(main_async_function())
-    # However, fire.Fire is the direct entry point here.
-    # For simplicity, and focusing on the class methods:
-    # The 'run' method in the class is now async.
-    # If 'main' is the direct script entry, and it calls an async method,
-    # 'main' itself should be async and run with asyncio.run().
-
-    # Given fire.Fire(nb_translator.run) and 'run' is now async,
-    # this implies fire.Fire needs to be compatible with async functions.
-    # Most modern versions of Fire support this.
-    # If issues arise, the main function would need to be:
-    # async def main_async():
-    #     nb_translator = NbTranslator()
-    #     fire.Fire(nb_translator.run) # This might still be an issue if fire doesn't await it.
-    #
-    # A more robust way for fire with async:
-    # class NbTranslatorWrapper:
-    # def __init__(self):
-    #         self.translator = NbTranslator()
-    #     def run(self, *args, **kwargs):
-    #         return asyncio.run(self.translator.run(*args, **kwargs))
-    # fire.Fire(NbTranslatorWrapper)
     main()
