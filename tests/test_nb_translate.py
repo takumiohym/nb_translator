@@ -1,6 +1,7 @@
 from unittest import TestCase, mock
 import os
 import json
+import asyncio # Added asyncio
 
 from google.cloud import translate
 import google.auth
@@ -17,9 +18,13 @@ def ignore_warnings(test_func):
 
 class TestNbTranslator(TestCase):
     @mock.patch('google.auth.default', return_value=(None, 'test-project'))
-    @mock.patch('google.cloud.translate.TranslationServiceClient')
-    def setUp(self, mock_translate_client, mock_auth_default):
+    @mock.patch('src.nb_translator.TranslationServiceAsyncClient') # Patched the correct path
+    def setUp(self, mock_async_translate_client, mock_auth_default): # Renamed for clarity
         self.nb_translator = NbTranslator()
+        # self.nb_translator.translate_client is an instance of MagicMock (the return_value of the class mock)
+        # So, we configure the translate_text method on this instance.
+        self.mock_translate_text_method = mock.AsyncMock() # Python 3.8+
+        self.nb_translator.translate_client.translate_text = self.mock_translate_text_method
 
     def test_split_start_symbols(self):
         nb_translator = self.nb_translator
@@ -70,22 +75,25 @@ class TestNbTranslator(TestCase):
         self.assertEqual(nb_translator._preprocess(text), text)
 
     @ignore_warnings
-    def test_translate(self):
+    async def test_translate(self): # Made async
         nb_translator = self.nb_translator
-        # Mock the translate_client's translate_text method
-        mock_translation = mock.Mock()
-        mock_translation.translated_text = 'Hola'
-        nb_translator.translate_client.translate_text.return_value = mock.Mock(translations=[mock_translation])
 
+        mock_response = mock.Mock()
+        mock_translation_item = mock.Mock()
+        mock_translation_item.translated_text = 'Hola'
+        mock_response.translations = [mock_translation_item]
 
-        nb_translator.project_id = 'test-project' #google.auth.default()[1]
+        self.mock_translate_text_method.return_value = mock_response # AsyncMock handles the awaitable part
+
+        nb_translator.project_id = 'test-project'
         nb_translator.region = 'global'
         nb_translator.source_language = 'en'
         nb_translator.target_language = 'es'
 
         text = 'Hello'
         expected = 'Hola'
-        self.assertEqual(nb_translator._translate([text]), expected)
+        # _translate now takes a single string and is awaited
+        self.assertEqual(await nb_translator._translate(text), expected)
         
     def test_remove_no_translate_tag(self):
         nb_translator = self.nb_translator
@@ -127,29 +135,33 @@ class TestNbTranslator(TestCase):
         self.assertEqual([nb_translator._postprocess(t) for t in texts ], expected)
 
     @ignore_warnings
-    def test_run(self):
+    async def test_run(self): # Made async
         nb_translator = self.nb_translator
 
         source_file = 'some.txt'
         target_language = 'ja'
         with self.assertRaises(OSError):
             # Pass project_id to prevent google.auth.default call in _initialize_settings
-            nb_translator.run(source_file, to=target_language, project_id="test-project")
+            # Run is now async, so it needs to be awaited
+            await nb_translator.run(source_file, to=target_language, project_id="test-project")
 
         source_file = 'some.ipynb'
         with self.assertRaises(AttributeError):
             # Pass project_id to prevent google.auth.default call in _initialize_settings
-            nb_translator.run(source_file, project_id="test-project")
+            await nb_translator.run(source_file, project_id="test-project")
 
         source_file = './tests/sample.ipynb'
         expected_target_file = f'./tests/{target_language}_sample.ipynb'
 
-        # Mock the translate_client's translate_text method for the run test
-        mock_translation = mock.Mock()
-        mock_translation.translated_text = 'こんにちは世界' # Sample translation
-        nb_translator.translate_client.translate_text.return_value = mock.Mock(translations=[mock_translation])
+        # Configure the mock_translate_text_method from setUp for the run test
+        # This will be used by all calls to _translate within the run
+        mock_run_response = mock.Mock()
+        mock_run_translation_item = mock.Mock()
+        mock_run_translation_item.translated_text = 'こんにちは世界' # Sample translation
+        mock_run_response.translations = [mock_run_translation_item]
+        self.mock_translate_text_method.return_value = mock_run_response # Configure the shared AsyncMock
 
-        nb_translator.run(source_file, to=target_language, project_id="test-project")
+        await nb_translator.run(source_file, to=target_language, project_id="test-project")
 
         self.assertTrue(os.path.exists(expected_target_file))
         

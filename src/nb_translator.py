@@ -2,8 +2,10 @@ import json
 import re
 import os
 import fire
+import asyncio
 
 from google.cloud import translate
+from google.cloud.translate_v3.services.translation_service import TranslationServiceAsyncClient
 import google.auth
 
 class NbTranslator():
@@ -27,7 +29,7 @@ class NbTranslator():
             '\\begin{equation}': '\\end{equation}' # Math equation block
         }
 
-        self.translate_client = translate.TranslationServiceClient()
+        self.translate_client = TranslationServiceAsyncClient()
 
     def _split_start_symbols(self, text):
         # Match only if the sentense start with these symbols and space after them.
@@ -64,7 +66,7 @@ class NbTranslator():
             text = self._exclude_url(text)
         return text
 
-    def _translate(self, text):
+    async def _translate(self, text):
         request={
             "parent": f"projects/{self.project_id}/locations/{self.region}",
             "contents": text,
@@ -72,7 +74,7 @@ class NbTranslator():
             "source_language_code": self.source_language,
             "target_language_code": self.target_language,
         }
-        target = self.translate_client.translate_text(request=request)
+        target = await self.translate_client.translate_text(request=request)
         return target.translations[0].translated_text
 
     def _remove_no_translate_tag(self, text):
@@ -170,56 +172,98 @@ class NbTranslator():
         except IOError:
             raise OSError(f"Could not write to target file: {filepath}")
 
-    def _translate_notebook_cells(self, ipynb, keep_source):
-        for cell in ipynb.get('cells', []):
+    async def _translate_notebook_cells(self, ipynb, keep_source):
+        tasks = []
+        # Structure to hold information about each line to be translated
+        # This will help in reconstructing the cell later
+        lines_to_process_map = {}
+
+
+        for cell_idx, cell in enumerate(ipynb.get('cells', [])):
             if cell.get('cell_type') == "markdown":
+                original_source_lines = cell.get('source', []).copy()
+                lines_to_process_map[cell_idx] = []
+
                 skip_translation_block = False
                 current_block_end_symbol = None
-                original_source_lines = cell.get('source', []).copy()
-                translated_source_lines = []
 
-                for line_content in original_source_lines:
+                for line_idx, line_content in enumerate(original_source_lines):
                     stripped_line = line_content.strip()
+                    entry = {
+                        'original_line': line_content,
+                        'prefix': '',
+                        'content_to_translate': '',
+                        'suffix': '',
+                        'translate': False,
+                        'preprocessed_line': '',
+                    }
 
                     if not skip_translation_block and stripped_line in self.exclude_block_symbol_pair:
                         skip_translation_block = True
                         current_block_end_symbol = self.exclude_block_symbol_pair[stripped_line]
-                        translated_source_lines.append(line_content)
                     elif skip_translation_block:
                         if stripped_line == current_block_end_symbol:
                             skip_translation_block = False
                             current_block_end_symbol = None
-                        translated_source_lines.append(line_content)
                     else:
                         preprocessed_line = self._preprocess(line_content)
+                        entry['preprocessed_line'] = preprocessed_line
                         prefix, content_to_translate, suffix = self._split_start_symbols(preprocessed_line)
 
-                        translated_content = ''
                         if content_to_translate:
-                            translated_content = self._translate([content_to_translate])
-                            translated_content = self._postprocess(translated_content)
+                            entry['translate'] = True
+                            entry['prefix'] = prefix
+                            entry['content_to_translate'] = content_to_translate
+                            entry['suffix'] = suffix
+                            # Pass a list to _translate as it expects a list of strings
+                            tasks.append(self._translate([content_to_translate]))
+                        else: # No content to translate, store prefix and suffix if they exist
+                            entry['prefix'] = prefix
+                            entry['suffix'] = suffix
+
+                    lines_to_process_map[cell_idx].append(entry)
+
+        translated_texts = await asyncio.gather(*tasks)
+
+        translation_idx = 0
+        for cell_idx, cell in enumerate(ipynb.get('cells', [])):
+            if cell.get('cell_type') == "markdown":
+                processed_lines_info = lines_to_process_map.get(cell_idx, [])
+                translated_source_lines = []
+                original_cell_lines_for_backup = []
+
+                for line_info in processed_lines_info:
+                    original_cell_lines_for_backup.append(line_info['original_line'])
+                    if line_info['translate']:
+                        translated_content = translated_texts[translation_idx]
+                        translation_idx += 1
+
+                        postprocessed_content = self._postprocess(translated_content)
 
                         # Ensure proper spacing for suffix, especially newline
-                        final_suffix = ('  ' + suffix) if suffix.strip() == '\n' else suffix
-                        if suffix.strip() == '\n' and not translated_content.endswith('\n') and not prefix.endswith('\n'):
-                             # Add double space for markdown line break if original line ended with newline and translated doesn't
-                             # and it's not a list item or header that might already handle spacing.
-                             if not (prefix.strip().endswith('-') or prefix.strip().endswith('*') or prefix.strip().startswith('#')):
-                                 final_suffix = '  \n' # Ensure markdown newline if required
-                             else:
-                                 final_suffix = suffix
+                        final_suffix = line_info['suffix']
+                        if final_suffix.strip() == '\n' and not postprocessed_content.endswith('\n') and not line_info['prefix'].endswith('\n'):
+                             if not (line_info['prefix'].strip().endswith('-') or line_info['prefix'].strip().endswith('*') or line_info['prefix'].strip().startswith('#')):
+                                 final_suffix = '  \n'
 
-                        final_line = prefix + re.sub(r"\s?/\s?", "/", translated_content) + final_suffix
+                        final_line = line_info['prefix'] + re.sub(r"\s?/\s?", "/", postprocessed_content) + final_suffix
                         translated_source_lines.append(final_line)
+                    else:
+                        # If not translated, reconstruct from original or from prefix/suffix if split was attempted
+                        if not line_info['prefix'] and not line_info['suffix'] and not line_info['content_to_translate']:
+                             translated_source_lines.append(line_info['original_line'])
+                        else: # Handles lines that were split but had no content_to_translate (e.g. empty lines, lines with only markdown symbols)
+                             translated_source_lines.append(line_info['prefix'] + line_info['content_to_translate'] + line_info['suffix'])
+
 
                 cell['source'] = translated_source_lines
                 if keep_source:
                     cell['source'].append("\n\n<!--\n")
-                    cell['source'].extend(original_source_lines) # Append original lines
+                    cell['source'].extend(original_cell_lines_for_backup)
                     cell['source'].append("\n -->\n")
         return ipynb
 
-    def run(self,
+    async def run(self,
             source_file,
             target_file=None,
             orig='en',
@@ -234,14 +278,14 @@ class NbTranslator():
         self._validate_inputs()
         
         notebook_content = self._load_notebook(self.source_file)
-        translated_notebook_content = self._translate_notebook_cells(notebook_content, keep_source)
+        translated_notebook_content = await self._translate_notebook_cells(notebook_content, keep_source)
         self._save_notebook(translated_notebook_content, self.target_file)
 
         print('{} version of {} is successfully generated as {}'.format(self.target_language, self.source_file, self.target_file))
 
 def main():
-    nb_translater = NbTranslator()
-    fire.Fire(nb_translater.run)
+    nb_translator = NbTranslator()
+    fire.Fire(nb_translator.run)
 
 if __name__ == '__main__':
     main()
