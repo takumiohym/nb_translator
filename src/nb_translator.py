@@ -25,6 +25,8 @@ class NbTranslator():
 
         # To split the long line by the length, by default, 5000 which is the limit of the GCP Translation API
         self.split_by_length = 5000
+        # To split the texts by the total codepoints, by default, 30720 which is the limit of the GCP Translation API
+        self.split_by_codepoints = 30720
 
         self.exclude_block_symbol_pair = {
             '```python': '```', # Python syntax highlight
@@ -75,16 +77,16 @@ class NbTranslator():
             text = self._exclude_url(text)
         return text
 
-    async def _translate(self, text):
+    async def _translate(self, texts):
         request={
             "parent": f"projects/{self.project_id}/locations/{self.region}",
-            "contents": text,
+            "contents": texts,
             "mime_type": "text/html",
             "source_language_code": self.source_language,
             "target_language_code": self.target_language,
         }
         target = await self.translate_client.translate_text(request=request)
-        return target.translations[0].translated_text
+        return [t.translated_text for t in target.translations]
 
     def _remove_no_translate_tag(self, text):
         if not text:
@@ -181,11 +183,31 @@ class NbTranslator():
         except IOError:
             raise OSError(f"Could not write to target file: {filepath}")
 
-    async def _translate_notebook_cells(self, ipynb, keep_source):
+    async def _translate_batch(self, texts):
+        # The method translates a batch of texts and returns the flattened translated texts.
         tasks = []
+        batch = []
+        total_len = 0
+        for text in texts:
+            if total_len + len(text) >= self.split_by_codepoints:
+                tasks.append(self._translate(batch))
+                batch = [text]
+                total_len = len(text)
+            else:
+                batch.append(text)
+                total_len += len(text)
+        if batch:
+            tasks.append(self._translate(batch))
+
+        results = await asyncio.gather(*tasks)
+        return [item for sublist in results for item in sublist]
+
+
+    async def _translate_notebook_cells(self, ipynb, keep_source):
         # Structure to hold information about each line to be translated
         # This will help in reconstructing the cell later
         lines_to_process_map = {}
+        texts_to_translate = []
 
 
         for cell_idx, cell in enumerate(ipynb.get('cells', [])):
@@ -224,19 +246,17 @@ class NbTranslator():
                             entry['prefix'] = prefix
                             # Split the long line into multiple lines and store them
                             entry['content_to_translate'] = self._split_lines_by_length(content_to_translate)
+                            texts_to_translate.extend(entry['content_to_translate'])
                             entry['suffix'] = suffix
-                            # Pass a list to _translate as it expects a list of strings
-                            for content in entry['content_to_translate']:
-                                tasks.append(self._translate([content]))
                         else: # No content to translate, store prefix and suffix if they exist
                             entry['prefix'] = prefix
                             entry['suffix'] = suffix
 
                     lines_to_process_map[cell_idx].append(entry)
 
-        translated_texts = await asyncio.gather(*tasks)
+        translated_texts = await self._translate_batch(texts_to_translate)
 
-        translation_idx = 0
+        translated_texts_iter = iter(translated_texts)
         for cell_idx, cell in enumerate(ipynb.get('cells', [])):
             if cell.get('cell_type') == "markdown":
                 processed_lines_info = lines_to_process_map.get(cell_idx, [])
@@ -247,7 +267,7 @@ class NbTranslator():
                     original_cell_lines_for_backup.append(line_info['original_line'])
                     if line_info['translate']:
                         # Pop the translated text from the list
-                        translated_content = "".join([translated_texts.pop(0) for _ in range(len(line_info['content_to_translate']))])
+                        translated_content = "".join([next(translated_texts_iter) for _ in range(len(line_info['content_to_translate']))])
 
                         postprocessed_content = self._postprocess(translated_content)
 
