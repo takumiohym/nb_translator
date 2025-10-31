@@ -13,7 +13,10 @@ def ignore_warnings(test_func):
     def do_test(self, *args, **kwargs):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ResourceWarning)
-            test_func(self, *args, **kwargs)
+            if asyncio.iscoroutinefunction(test_func):
+                asyncio.run(test_func(self, *args, **kwargs))
+            else:
+                test_func(self, *args, **kwargs)
     return do_test
 
 class TestNbTranslator(TestCase):
@@ -89,25 +92,56 @@ class TestNbTranslator(TestCase):
         self.assertEqual(nb_translator._preprocess(text), text)
 
     @ignore_warnings
-    async def test_translate(self): # Made async
-        nb_translator = self.nb_translator
+    def test_translate(self):
+        async def run_test():
+            nb_translator = self.nb_translator
 
-        mock_response = mock.Mock()
-        mock_translation_item = mock.Mock()
-        mock_translation_item.translated_text = 'Hola'
-        mock_response.translations = [mock_translation_item]
+            # Create a mock response object
+            mock_response = mock.Mock()
+            mock_translation = mock.Mock()
+            mock_translation.translated_text = "Hola"
+            mock_response.translations = [mock_translation]
 
-        self.mock_translate_text_method.return_value = mock_response # AsyncMock handles the awaitable part
+            self.mock_translate_text_method.return_value = mock_response
 
-        nb_translator.project_id = 'test-project'
-        nb_translator.region = 'global'
-        nb_translator.source_language = 'en'
-        nb_translator.target_language = 'es'
+            nb_translator.project_id = 'test-project'
+            nb_translator.region = 'global'
+            nb_translator.source_language = 'en'
+            nb_translator.target_language = 'es'
 
-        text = 'Hello'
-        expected = 'Hola'
-        # _translate now takes a single string and is awaited
-        self.assertEqual(await nb_translator._translate(text), expected)
+            texts = ['Hello']
+            expected = ['Hola']
+            self.assertEqual(await nb_translator._translate(texts), expected)
+        asyncio.run(run_test())
+
+    @ignore_warnings
+    def test_translate_batch(self):
+        async def run_test():
+            nb_translator = self.nb_translator
+            nb_translator.split_by_codepoints = 10
+
+            # Mock the _translate method
+            async def mock_translate(batch):
+                await asyncio.sleep(0.01)  # simulate network latency
+                return [f"translated_{t}" for t in batch]
+
+            nb_translator._translate = mock.AsyncMock(side_effect=mock_translate)
+
+            # Test case 1: A batch that is smaller than the limit
+            texts = ["a" * 2, "b" * 3, "c" * 4]
+            expected = ["translated_" + "a" * 2, "translated_" + "b" * 3, "translated_" + "c" * 4]
+            self.assertEqual(await nb_translator._translate_batch(texts), expected)
+            self.assertEqual(nb_translator._translate.call_count, 1)
+
+            # Reset the mock for the next test case
+            nb_translator._translate.reset_mock()
+
+            # Test case 2: A batch that needs to be split
+            texts = ["a" * 5, "b" * 6, "c" * 7]
+            expected = ["translated_" + "a" * 5, "translated_" + "b" * 6, "translated_" + "c" * 7]
+            self.assertEqual(await nb_translator._translate_batch(texts), expected)
+            self.assertEqual(nb_translator._translate.call_count, 3)
+        asyncio.run(run_test())
         
     def test_remove_no_translate_tag(self):
         nb_translator = self.nb_translator
@@ -149,33 +183,29 @@ class TestNbTranslator(TestCase):
         self.assertEqual([nb_translator._postprocess(t) for t in texts ], expected)
 
     @ignore_warnings
-    async def test_run(self): # Made async
+    def test_run(self):
         nb_translator = self.nb_translator
 
         source_file = 'some.txt'
         target_language = 'ja'
         with self.assertRaises(OSError):
-            # Pass project_id to prevent google.auth.default call in _initialize_settings
-            # Run is now async, so it needs to be awaited
-            await nb_translator.run(source_file, to=target_language, project_id="test-project")
+            asyncio.run(nb_translator.run(source_file, to=target_language, project_id="test-project"))
 
         source_file = 'some.ipynb'
         with self.assertRaises(AttributeError):
-            # Pass project_id to prevent google.auth.default call in _initialize_settings
-            await nb_translator.run(source_file, project_id="test-project")
+            asyncio.run(nb_translator.run(source_file, project_id="test-project"))
 
         source_file = './tests/sample.ipynb'
         expected_target_file = f'./tests/{target_language}_sample.ipynb'
 
         # Configure the mock_translate_text_method from setUp for the run test
-        # This will be used by all calls to _translate within the run
         mock_run_response = mock.Mock()
         mock_run_translation_item = mock.Mock()
         mock_run_translation_item.translated_text = 'こんにちは世界' # Sample translation
-        mock_run_response.translations = [mock_run_translation_item]
-        self.mock_translate_text_method.return_value = mock_run_response # Configure the shared AsyncMock
+        mock_run_response.translations = [mock_run_translation_item] * 24 # The number of lines to translate in sample.ipynb
+        self.mock_translate_text_method.return_value = mock_run_response
 
-        await nb_translator.run(source_file, to=target_language, project_id="test-project")
+        asyncio.run(nb_translator.run(source_file, to=target_language, project_id="test-project"))
 
         self.assertTrue(os.path.exists(expected_target_file))
         
