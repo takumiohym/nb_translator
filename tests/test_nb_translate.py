@@ -53,6 +53,13 @@ class TestTextProcessor(TestCase):
         expected = 'aaa bbb ![image.png](attachment:image.png) ddd'
         self.assertEqual(self.text_processor._restore_image_tags(text), expected)
 
+    def test_preprocess_with_multiple_images(self):
+        text = '![img1](url1)\n![img2](url2)'
+        processed_text = self.text_processor.preprocess(text)
+        self.assertIn('__IMAGE_PLACEHOLDER_0__', processed_text)
+        self.assertIn('__IMAGE_PLACEHOLDER_1__', processed_text)
+        self.assertEqual(len(self.text_processor.image_placeholders), 2)
+
     def test_preprocess(self):
         text_processor = TextProcessor(exclude_inline_code=True)
         text = 'aaa `CCC`'
@@ -114,8 +121,9 @@ class TestNbTranslator(TestCase):
         )
         nb_translator.translation_client = mock_translator_instance
         
-        texts = ["hello"]
+        texts = ["hello", "![img1](url1)"]
         await nb_translator._translate_notebook_cells(
             {'cells': [{'cell_type': 'markdown', 'source': texts}]}, False
         )
         mock_translator_instance.translate_texts.assert_called_once()
+        self.assertEqual(len(nb_translator.text_processor.image_placeholders), 1)

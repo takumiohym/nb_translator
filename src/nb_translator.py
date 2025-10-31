@@ -57,13 +57,22 @@ class NbTranslator:
         return ipynb
 
     def _prepare_cell_for_translation(self, cell, texts_to_translate):
+        self.text_processor.image_placeholders.clear()
+
+        full_cell_content = "".join(cell.get('source', []))
+        preprocessed_content = self.text_processor.preprocess(full_cell_content)
+        preprocessed_lines = preprocessed_content.splitlines(True)
+
         processed_lines_info = []
         skip_translation_block = False
         current_block_end_symbol = None
 
-        for line_content in cell.get('source', []):
+        original_lines = cell.get('source', [])
+
+        for i, line_content in enumerate(preprocessed_lines):
+            original_line = original_lines[i] if i < len(original_lines) else ""
             stripped_line = line_content.strip()
-            entry = self._create_translation_entry(line_content)
+            entry = self._create_translation_entry(original_line)
 
             if not skip_translation_block and stripped_line in self.exclude_block_symbol_pair:
                 skip_translation_block = True
@@ -71,7 +80,7 @@ class NbTranslator:
             elif skip_translation_block and stripped_line == current_block_end_symbol:
                 skip_translation_block = False
             else:
-                self._process_line_for_translation(entry, texts_to_translate)
+                self._process_line_for_translation(entry, line_content, texts_to_translate)
 
             processed_lines_info.append(entry)
 
@@ -80,8 +89,7 @@ class NbTranslator:
     def _create_translation_entry(self, line_content):
         return {'original_line': line_content, 'translate': False, 'prefix': '', 'content_to_translate': [], 'suffix': ''}
 
-    def _process_line_for_translation(self, entry, texts_to_translate):
-        preprocessed_line = self.text_processor.preprocess(entry['original_line'])
+    def _process_line_for_translation(self, entry, preprocessed_line, texts_to_translate):
         prefix, content, suffix = self.text_processor.split_start_symbols(preprocessed_line)
 
         if content:

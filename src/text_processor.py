@@ -40,7 +40,6 @@ class TextProcessor:
         return text  # Placeholder for URL exclusion logic
 
     def _exclude_image_tag(self, text):
-        self.image_placeholders.clear()
         def replacer(match):
             placeholder = f"__IMAGE_PLACEHOLDER_{len(self.image_placeholders)}__"
             self.image_placeholders[placeholder] = match.group(0)
