@@ -15,6 +15,7 @@ class NbTranslator():
         self.no_translate_end_tag = '</span>'
         self.no_translate_start_tag_re = re.compile(self.no_translate_start_tag)
         self.no_translate_end_tag_re = re.compile(self.no_translate_end_tag)
+        self.image_placeholders = {}
 
         # Matches lines starting with markdown symbols or only content.
         self.split_start_symbols_re = re.compile(r"([#|>|\-|\*|\d\.|\s]*\s)?(.*)(\n?)")
@@ -61,6 +62,15 @@ class NbTranslator():
     def _exclude_url(self, text):
         return text
 
+    def _exclude_image_tag(self, text):
+        self.image_placeholders = {}
+        def replacer(match):
+            placeholder = f"__IMAGE_PLACEHOLDER_{len(self.image_placeholders)}__"
+            self.image_placeholders[placeholder] = match.group(0)
+            return f'{self.no_translate_start_tag}{placeholder}{self.no_translate_end_tag}'
+
+        return re.sub(r'!\[(.*?)\]\((.*?)\)', replacer, text)
+
     def _split_lines_by_length(self, text):
         if not text or len(text) <= self.split_by_length:
             return [text]
@@ -75,6 +85,8 @@ class NbTranslator():
             text = self._exclude_code_highlight(text)
         if self.exclude_url:
             text = self._exclude_url(text)
+
+        text = self._exclude_image_tag(text)
         return text
 
     async def _translate(self, texts):
@@ -122,6 +134,11 @@ class NbTranslator():
             return text
         return self.inline_math_re.sub(lambda m: '$' + m.group(1).replace(' ', '') + '$', text)
 
+    def _restore_image_tags(self, text):
+        for placeholder, original_tag in self.image_placeholders.items():
+            text = text.replace(placeholder, original_tag)
+        return text
+
     def _postprocess(self, text):
         if not text: # Added guard clause for the whole postprocess
             return text
@@ -129,6 +146,7 @@ class NbTranslator():
         text = self._fix_markdown_symbols(text)
         text = self._trim_text_format_symbols(text)
         text = self._trim_inline_math_equation(text)
+        text = self._restore_image_tags(text)
         return text
 
     def _initialize_settings(self, source_file, target_file, orig_lang, target_lang, project_id, region, exclude_inline_code, exclude_url):

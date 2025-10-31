@@ -78,6 +78,28 @@ class TestNbTranslator(TestCase):
         expected = 'aaa bbb <span translate="no">`CCC`</span> ddd <span translate="no">`EEE`</span>'
         self.assertEqual(nb_translator._exclude_code_highlight(text), expected)
 
+    def test_exclude_image_tag(self):
+        nb_translator = self.nb_translator
+        nb_translator.image_placeholders = {}
+
+        text = 'aaa bbb ![image_6.png](attachment:image_6.png) ddd'
+        expected_text = 'aaa bbb <span translate="no">__IMAGE_PLACEHOLDER_0__</span> ddd'
+        expected_placeholders = {'__IMAGE_PLACEHOLDER_0__': '![image_6.png](attachment:image_6.png)'}
+
+        processed_text = nb_translator._exclude_image_tag(text)
+
+        self.assertEqual(processed_text, expected_text)
+        self.assertEqual(nb_translator.image_placeholders, expected_placeholders)
+
+    def test_restore_image_tags(self):
+        nb_translator = self.nb_translator
+        nb_translator.image_placeholders = {'__IMAGE_PLACEHOLDER_0__': '![image_6.png](attachment:image_6.png)'}
+
+        text = 'aaa bbb __IMAGE_PLACEHOLDER_0__ ddd'
+        expected = 'aaa bbb ![image_6.png](attachment:image_6.png) ddd'
+
+        self.assertEqual(nb_translator._restore_image_tags(text), expected)
+
     def test_preprocess(self):
         nb_translator = self.nb_translator
 
