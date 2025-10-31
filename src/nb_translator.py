@@ -59,6 +59,12 @@ class NbTranslator():
     def _exclude_url(self, text):
         return text
 
+    def _exclude_image_tags(self, text):
+        # Exclude image tags in markdown from translation ![]()
+        return re.sub(r'!\[(.*?)\]\((.*?)\)',
+                      f'{self.no_translate_start_tag}\\g<0>{self.no_translate_end_tag}',
+                      text)
+
     def _split_lines_by_length(self, text):
         if not text or len(text) <= self.split_by_length:
             return [text]
@@ -73,6 +79,7 @@ class NbTranslator():
             text = self._exclude_code_highlight(text)
         if self.exclude_url:
             text = self._exclude_url(text)
+        text = self._exclude_image_tags(text)
         return text
 
     async def _translate(self, text):
