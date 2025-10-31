@@ -23,6 +23,9 @@ class NbTranslator():
         # For _trim_inline_math_equation
         self.inline_math_re = re.compile(r'\$(.*?)\$')
 
+        # To split the long line by the length, by default, 5000 which is the limit of the GCP Translation API
+        self.split_by_length = 5000
+
         self.exclude_block_symbol_pair = {
             '```python': '```', # Python syntax highlight
             '```': '```', # General code block
@@ -55,6 +58,12 @@ class NbTranslator():
     # TODO
     def _exclude_url(self, text):
         return text
+
+    def _split_lines_by_length(self, text):
+        if not text or len(text) <= self.split_by_length:
+            return [text]
+
+        return [text[i:i+self.split_by_length] for i in range(0, len(text), self.split_by_length)]
 
     def _preprocess(self, text):
         if not text:
@@ -213,10 +222,12 @@ class NbTranslator():
                         if content_to_translate:
                             entry['translate'] = True
                             entry['prefix'] = prefix
-                            entry['content_to_translate'] = content_to_translate
+                            # Split the long line into multiple lines and store them
+                            entry['content_to_translate'] = self._split_lines_by_length(content_to_translate)
                             entry['suffix'] = suffix
                             # Pass a list to _translate as it expects a list of strings
-                            tasks.append(self._translate([content_to_translate]))
+                            for content in entry['content_to_translate']:
+                                tasks.append(self._translate([content]))
                         else: # No content to translate, store prefix and suffix if they exist
                             entry['prefix'] = prefix
                             entry['suffix'] = suffix
@@ -235,8 +246,8 @@ class NbTranslator():
                 for line_info in processed_lines_info:
                     original_cell_lines_for_backup.append(line_info['original_line'])
                     if line_info['translate']:
-                        translated_content = translated_texts[translation_idx]
-                        translation_idx += 1
+                        # Pop the translated text from the list
+                        translated_content = "".join([translated_texts.pop(0) for _ in range(len(line_info['content_to_translate']))])
 
                         postprocessed_content = self._postprocess(translated_content)
 

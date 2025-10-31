@@ -54,6 +54,20 @@ class TestNbTranslator(TestCase):
         self.assertEqual([nb_translator._split_start_symbols(t) for t in texts], expected)
 
         
+    def test_split_lines_by_length(self):
+        nb_translator = self.nb_translator
+        nb_translator.split_by_length = 10
+
+        text = 'a' * 5
+        self.assertEqual(nb_translator._split_lines_by_length(text), [text])
+
+        text = 'a' * 10
+        self.assertEqual(nb_translator._split_lines_by_length(text), [text])
+
+        text = 'a' * 11
+        expected = ['a' * 10, 'a']
+        self.assertEqual(nb_translator._split_lines_by_length(text), expected)
+
     def test_exclude_code_highlight(self):
         nb_translator = self.nb_translator
 
